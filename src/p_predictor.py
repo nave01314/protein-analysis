@@ -2,6 +2,7 @@
 
 import tensorflow as tf
 import os
+import res.helper
 
 
 def train(primary, secondary, v_primary, v_secondary):
@@ -21,15 +22,14 @@ def train(primary, secondary, v_primary, v_secondary):
     sess = tf.Session()
     sess.run(init)
 
-    for i in range(100):
-        print(i)
+    for i in range(10):
+        res.helper.print('Training Step %s' % i)
         batch_xs, batch_ys = primary, secondary
         sess.run(train_step, feed_dict={x: batch_xs, y_: batch_ys})
 
     correct_prediction = tf.equal(tf.argmax(y, 1), tf.argmax(y_, 1))
     accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
-    return sess.run(accuracy, feed_dict={x: v_primary, y_: v_secondary})
-
+    return sess.run(y, feed_dict={x: v_primary, y_: v_secondary})
 
 
 def assess_model(primary, secondary):

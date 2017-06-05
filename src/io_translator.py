@@ -3,6 +3,7 @@
 import sys
 import string
 import res.helper
+import numpy
 
 amino_map = {'1': 'Ala', '2': 'Asx', '3': 'Cys', '4': 'Asp', '5': 'Glu', '6': 'Phe', '7': 'Gly', '8': 'His', '9': 'Ile', '10': '10 is not a key!', '11': 'Lys', '12': 'Leu', '13': 'Met', '14': 'Asn', '15': '15 is not a key!', '16': 'Pro', '17': 'Gln', '18': 'Arg', '19': 'Ser', '20': 'Thr', '21': 'Selenocysteine', '22': 'Val', '23': 'Trp', '24': 'Any', '25': 'Tyr', '26': 'Glx'}
 
@@ -12,6 +13,7 @@ def convert_FASTA(label, primary, secondary, v_label, v_primary, v_secondary):
     file = open(filename, 'r')
     sequences = []
     l_index = 0
+    max_length = 0
     for line in file:
         if line.find('sequence') is not -1:
             sequences.append([])
@@ -30,13 +32,17 @@ def convert_FASTA(label, primary, secondary, v_label, v_primary, v_secondary):
             label.append(sequence[0][1:7])
             primary.append(sequence[1])
             secondary.append(sequence[3])
-        else:
+        elif len(v_label) < 50000:
             v_label.append(sequence[0][1:7])
             v_primary.append(sequence[1])
             v_secondary.append(sequence[3])
+        if len(sequence[1]) > max_length:
+            max_length = len(sequence[1])
+
+    return max_length
 
 
-def input_reformat(sequences):
+def input_reformat(sequences, length):
     new_format = []
     count = 0
     for seq in sequences:
@@ -47,6 +53,9 @@ def input_reformat(sequences):
             else:
                 new_format[count].append(-1)
         count += 1
+
+    for seq in new_format:
+        seq.extend([-1] * (length - len(seq)))
     return new_format
 
 

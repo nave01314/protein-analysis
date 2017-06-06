@@ -1,8 +1,8 @@
 res/__pycache__/
 src/__pycache__/
 .idea/
-fasta_o.txt
-MLPA.iml
+protein-analysis.iml
+fasta.txt
 res/fasta.txt
 
 

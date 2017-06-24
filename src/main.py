@@ -14,11 +14,8 @@ v_secondary = []
 width = 1
 v_width = 0
 
-print()
 res.helper.print('Beginning FASTA load from file...')
 max_length = io_translator.convert_FASTA(label, primary, secondary, v_label, v_primary, v_secondary, width, v_width)
-res.helper.print(str(primary))
-res.helper.print(str(secondary))
 res.helper.print('FASTA data loaded %s training proteins and %s validation proteins successfully...' % (len(label),
                                                                                                         len(v_label)))
 

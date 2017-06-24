@@ -4,5 +4,4 @@ src/__pycache__/
 protein-analysis.iml
 fasta.txt
 res/fasta.txt
-
-
+res/test.txt

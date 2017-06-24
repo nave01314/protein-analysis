@@ -11,27 +11,21 @@ v_label = []
 v_primary = []
 v_secondary = []
 
-width = 3000
-v_width = 500
+width = 1
+v_width = 0
 
 print()
 res.helper.print('Beginning FASTA load from file...')
 max_length = io_translator.convert_FASTA(label, primary, secondary, v_label, v_primary, v_secondary, width, v_width)
-res.helper.print('FASTA data loaded %s sequences successfully...' % (len(label)+len(v_label)))
-
-res.helper.print('Beginning primary sequence conversion...')
-primary = io_translator.input_reformat(primary, width, max_length)
-v_primary = io_translator.input_reformat(v_primary, v_width, max_length)
-res.helper.print('Primary sequence conversion finished %s training proteins and %s validation proteins successfully...' % (len(primary), len(v_primary)))
-
-res.helper.print('Beginning secondary sequence conversion...')
-secondary = io_translator.input_reformat(secondary, width, max_length)
-v_secondary = io_translator.input_reformat(v_secondary, v_width, max_length)
-res.helper.print('Secondary sequence conversion finished %s training proteins and %s validation proteins successfully...' % (len(secondary), len(v_secondary)))
+res.helper.print(str(primary))
+res.helper.print(str(secondary))
+res.helper.print('FASTA data loaded %s training proteins and %s validation proteins successfully...' % (len(label),
+                                                                                                        len(v_label)))
 
 res.helper.print('Beginning model training...')
-accuracy = predict.train(primary, secondary, v_primary, v_secondary)
-res.helper.print('Model training finished with an accuracy of %s...' % accuracy)
+#predict.model()
+predict.train(primary, secondary, v_primary, v_secondary, max_length)
+#res.helper.print('Model training finished with an accuracy of %s...' % accuracy)
 
 # res.helper.print('Beginning model training...')
 # loss = predict.train(primary, secondary)

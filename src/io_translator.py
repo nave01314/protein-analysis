@@ -5,11 +5,12 @@ import string
 import res.helper
 import numpy
 
-amino_map = {'1': 'Ala', '2': 'Asx', '3': 'Cys', '4': 'Asp', '5': 'Glu', '6': 'Phe', '7': 'Gly', '8': 'His', '9': 'Ile', '10': '10 is not a key!', '11': 'Lys', '12': 'Leu', '13': 'Met', '14': 'Asn', '15': '15 is not a key!', '16': 'Pro', '17': 'Gln', '18': 'Arg', '19': 'Ser', '20': 'Thr', '21': 'Selenocysteine', '22': 'Val', '23': 'Trp', '24': 'Any', '25': 'Tyr', '26': 'Glx'}
+amino_map = {'A': 'Ala', 'B': 'Asx', 'C': 'Cys', 'D': 'Asp', 'E': 'Glu', 'F': 'Phe', 'G': 'Gly', 'H': 'His', 'I': 'Ile', 'K': 'Lys', 'L': 'Leu', 'M': 'Met', 'N': 'Asn', 'P': 'Pro', 'Q': 'Gln', 'R': 'Arg', 'S': 'Ser', 'T': 'Thr', 'U': 'Selenocysteine', 'V': 'Val', 'W': 'Trp', 'X': 'Any', 'Y': 'Tyr', 'Z': 'Glx'}
+ss_map = {' ': 'Gap', 'H': 'Alpha helix', 'B': 'Beta bridge', 'E': 'Strand', 'G': 'Helix-3', 'I': 'Helix-5', 'T': 'Turn', 'S': 'Bend'}
 
 
 def convert_FASTA(label, primary, secondary, v_label, v_primary, v_secondary, width, v_width):
-    filename = res.helper.make_relative_path('res', 'fasta.txt')
+    filename = res.helper.make_relative_path('res', 'test.txt')
     file = open(filename, 'r')
     sequences = []
     l_index = 0
@@ -17,49 +18,41 @@ def convert_FASTA(label, primary, secondary, v_label, v_primary, v_secondary, wi
     for line in file:
         if line.find('sequence') is not -1:
             sequences.append([])
-            sequences[len(sequences)-1].append(line[:-1])   # Get rid of line breaks
-            sequences[len(sequences)-1].append('')
+            sequences[-1].append(line[:-1])   # Get rid of line breaks
+            sequences[-1].append('')
             l_index = 1
         elif line.find('secstr') is not -1:
-            sequences[len(sequences)-1].append(line[:-1])
-            sequences[len(sequences)-1].append('')
+            sequences[-1].append(line[:-1])
+            sequences[-1].append('')
             l_index = 3
         else:
-            sequences[len(sequences)-1][l_index] = sequences[len(sequences)-1][l_index] + (line[:-1])
+            sequences[-1][l_index] = sequences[-1][l_index] + (line[:-1])
 
-    for sequence in sequences:
+    for protein in sequences:
         if len(label) < width:
-            label.append(sequence[0][1:7])
-            primary.append(sequence[1])
-            secondary.append(sequence[3])
+            label.append(protein[0][1:7])
+            primary.append(protein[1])
+            secondary.append(protein[3])
+            if len(protein[1]) > max_length:
+                max_length = len(protein[1])
         elif len(v_label) < v_width:
-            v_label.append(sequence[0][1:7])
-            v_primary.append(sequence[1])
-            v_secondary.append(sequence[3])
-
-        if len(sequence[1]) > max_length:
-            max_length = len(sequence[1])
-
+            v_label.append(protein[0][1:7])
+            v_primary.append(protein[1])
+            v_secondary.append(protein[3])
+            if len(protein[1]) > max_length:
+                max_length = len(protein[1])
     return max_length
 
 
-def input_reformat(sequences, width, length):
-    new_format = numpy.full((width, length), -1, dtype=numpy.int8)
-    countx = 0
-    for seq in sequences:
-        county = 0
-        for char in seq:
-            if char is not ' ':
-                new_format[countx][county] = string.ascii_uppercase.index(char)
-            county += 1
-        countx += 1
-
-    return new_format
+def ltoa(letter: str):
+    try:
+        return amino_map[letter]
+    except KeyError:
+        print('KeyError: %s is not an acceptable primary key!' % letter)
 
 
-def print_sequences(label, primary, secondary):
-    for i in range(0, len(label)-1):
-        print(label[i])
-        print(primary[i])
-        print(secondary[i])
-        print()
+def ltos(letter: str):
+    try:
+        return ss_map[letter]
+    except KeyError:
+        print('KeyError: %s is not an acceptable secondary key!' % letter)

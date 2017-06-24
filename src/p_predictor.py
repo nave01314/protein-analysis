@@ -1,42 +1,250 @@
 # This file is for all ML functions
 
-import tensorflow as tf
-import os
-import res.helper
 
-
-def train(primary, secondary, v_primary, v_secondary):
-    # Don't remove this, I need it to mitigate tf build warnings
+def train(primary: list, secondary: list, v_primary: list, v_secondary: list, max_length: int):
+    """Sequence-to-sequence model with an attention mechanism."""
+    # see https://www.tensorflow.org/versions/r0.10/tutorials/seq2seq/index.html
+    # compare https://github.com/tflearn/tflearn/blob/master/examples/nlp/seq2seq_example.py
+    import numpy as np
+    import tensorflow as tf
+    import os
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
-    x = tf.placeholder(tf.float32, [None, len(primary[0])])
-    W = tf.Variable(tf.zeros([len(primary[0]), len(secondary[0])]))
-    b = tf.Variable(tf.zeros([len(secondary[0])]))
-    y = tf.nn.softmax(tf.matmul(x, W) + b)
-    y_ = tf.placeholder(tf.float32, [None, len(secondary[0])])
+    vocab_size = 256                # We are lazy, so we avoid fancy mapping and just use one *class* per character/byte
+    target_vocab_size = vocab_size
+    learning_rate = 0.1
+    # buckets = [(10, 10)]              # our input and response words can be up to 10 characters long
+    buckets = [(max_length if max_length > 10 else 10, max_length if max_length > 10 else 10)]
+    PAD = [0]                       # fill words shorter than 10 characters with 'padding' zeroes
+    batch_size = 10                     # for parallel training (later)
 
-    cross_entropy = tf.reduce_mean(-tf.reduce_sum(y_ * tf.log(y), reduction_indices=[1]))
-    train_step = tf.train.GradientDescentOptimizer(0.5).minimize(cross_entropy)
+    #input_data = [list(map(ord, "hello")) + PAD * 5] * batch_size
+    for protein in primary:
+        input_data = ([list(map(ord, protein)) + PAD * (10-len(protein))] * batch_size)
+    #target_data = [list(map(ord, "world")) + PAD * 5] * batch_size
+    for protein in secondary:
+        target_data = ([list(map(ord, protein)) + PAD * (10-len(protein))] * batch_size)
+    target_weights = [[1.0]*6 + [0.0]*4] * batch_size                # mask padding. todo: redundant --
 
-    init = tf.global_variables_initializer()
-    sess = tf.Session()
-    sess.run(init)
+    # EOS='\n' # end of sequence symbol todo use how?
+    # GO=1		 # start symbol 0x01 todo use how?
 
-    for i in range(10):
-        res.helper.print('Training Step %s' % i)
-        batch_xs, batch_ys = primary, secondary
-        sess.run(train_step, feed_dict={x: batch_xs, y_: batch_ys})
+    class BabySeq2Seq(object):
+        def __init__(self, source_vocab_size, target_vocab_size, buckets, size, num_layers, batch_size):
+            self.source_vocab_size = source_vocab_size
+            self.target_vocab_size = target_vocab_size
+            self.buckets = buckets
+            self.batch_size = batch_size
 
-    correct_prediction = tf.equal(tf.argmax(y, 1), tf.argmax(y_, 1))
-    accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
-    return sess.run(y, feed_dict={x: v_primary, y_: v_secondary})
+            cell = single_cell = tf.nn.rnn_cell.GRUCell(size)
+            if num_layers > 1:
+                cell = tf.nn.rnn_cell.MultiRNNCell([single_cell] * num_layers)
+
+            # The seq2seq function: we use embedding for the input and attention.
+            def seq2seq_f(encoder_inputs, decoder_inputs, do_decode):
+                return tf.contrib.legacy_seq2seq.embedding_attention_seq2seq(
+                    encoder_inputs, decoder_inputs, cell,
+                    num_encoder_symbols=source_vocab_size,
+                    num_decoder_symbols=target_vocab_size,
+                    embedding_size=size,
+                        feed_previous=do_decode)
+
+            # Feeds for inputs.
+            self.encoder_inputs = []
+            self.decoder_inputs = []
+            self.target_weights = []
+            for i in range(buckets[-1][0]):	    # Last bucket is the biggest one.
+                self.encoder_inputs.append(tf.placeholder(tf.int32, shape=[None], name="encoder{0}".format(i)))
+            for i in range(buckets[-1][1] + 1):
+                self.decoder_inputs.append(tf.placeholder(tf.int32, shape=[None], name="decoder{0}".format(i)))
+                self.target_weights.append(tf.placeholder(tf.float32, shape=[None], name="weight{0}".format(i)))
+
+            # Our targets are decoder inputs shifted by one. OK
+            targets = [self.decoder_inputs[i + 1] for i in range(len(self.decoder_inputs) - 1)]
+            self.outputs, self.losses = tf.contrib.legacy_seq2seq.model_with_buckets(
+                self.encoder_inputs, self.decoder_inputs, targets,
+                self.target_weights, buckets,
+                lambda x, y: seq2seq_f(x, y, False))
+
+            # Gradients update operation for training the model.
+            params = tf.trainable_variables()
+            self.updates = []
+            for b in range(len(buckets)):
+                self.updates.append(tf.train.AdamOptimizer(learning_rate).minimize(self.losses[b]))
+
+            self.saver = tf.train.Saver(tf.global_variables())
+
+        def step(self, session, encoder_inputs, decoder_inputs, target_weights, test):
+            bucket_id = 0                   # todo: auto-select
+            encoder_size, decoder_size = self.buckets[bucket_id]
+
+            # Input feed: encoder inputs, decoder inputs, target_weights, as provided.
+            input_feed = {}
+            for l in range(encoder_size):
+                input_feed[self.encoder_inputs[l].name] = encoder_inputs[l]
+            for l in range(decoder_size):
+                input_feed[self.decoder_inputs[l].name] = decoder_inputs[l]
+                input_feed[self.target_weights[l].name] = target_weights[l]
+
+            # Since our targets are decoder inputs shifted by one, we need one more.
+            last_target = self.decoder_inputs[decoder_size].name
+            input_feed[last_target] = np.zeros([self.batch_size], dtype=np.int32)
+
+            # Output feed: depends on whether we do a backward step or not.
+            if not test:
+                output_feed = [self.updates[bucket_id], self.losses[bucket_id]]
+            else:
+                output_feed = [self.losses[bucket_id]]	    # Loss for this batch.
+                for l in range(decoder_size):	            # Output logits.
+                    output_feed.append(self.outputs[bucket_id][l])
+
+            outputs = session.run(output_feed, input_feed)
+            if not test:
+                return outputs[0], outputs[1]               # Gradient norm, loss
+            else:
+                return outputs[0], outputs[1:]              # loss, outputs.
+
+    def decode(_bytes):
+        return "".join(map(chr, _bytes)).replace('\x00', '').replace('\n', '')
+
+    def test():
+        perplexity, outputs = model.step(session, input_data, target_data, target_weights, test=True)
+        words = np.argmax(outputs, axis=2)  # shape (10, 10, 256)
+        word = decode(words[0])
+        print('step %d, perplexity %f, output: Primary: [%s] Secondary: [%s] ' % (step, perplexity, primary[0], word))
+        if word == secondary[0]:
+            print('>>>>> success! Primary: [%s] Secondary: [%s] <<<<<<<' % (primary[0], word))
+            exit()
+
+    step = 0
+    test_step = 1
+    with tf.Session() as session:
+        model = BabySeq2Seq(vocab_size, target_vocab_size, buckets, size=max_length, num_layers=1, batch_size=batch_size)
+        session.run(tf.global_variables_initializer())
+        while True:
+            model.step(session, input_data, target_data, target_weights, test=False)    # no outputs in training
+            if step % test_step == 0:
+                test()
+            step = step + 1
 
 
-def assess_model(primary, secondary):
-    correct = 0
-    # for seq in secondary:
-    #     training_result = []
-    #     for i in range(0, len(seq)-1):
-    #         if training_result[i] is secondary[i]:
-    #             correct += 1
-    return correct/(len(secondary)-1)
+def model():
+    """Sequence-to-sequence model with an attention mechanism."""
+    # see https://www.tensorflow.org/versions/r0.10/tutorials/seq2seq/index.html
+    # compare https://github.com/tflearn/tflearn/blob/master/examples/nlp/seq2seq_example.py
+    import numpy as np
+    import tensorflow as tf
+    import os
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+
+    vocab_size = 256                # We are lazy, so we avoid fancy mapping and just use one *class* per character/byte
+    target_vocab_size = vocab_size
+    learning_rate = 0.1
+    buckets = [(10, 10)]              # our input and response words can be up to 10 characters long
+    PAD = [0]                       # fill words shorter than 10 characters with 'padding' zeroes
+    batch_size = 10                     # for parallel training (later)
+
+    input_data = [list(map(ord, "hello")) + PAD * 5] * batch_size
+    target_data = [list(map(ord, "world")) + PAD * 5] * batch_size
+    target_weights = [[1.0]*6 + [0.0]*4] * batch_size                # mask padding. todo: redundant --
+
+    # EOS='\n' # end of sequence symbol todo use how?
+    # GO=1		 # start symbol 0x01 todo use how?
+
+    class BabySeq2Seq(object):
+        def __init__(self, source_vocab_size, target_vocab_size, buckets, size, num_layers, batch_size):
+            self.source_vocab_size = source_vocab_size
+            self.target_vocab_size = target_vocab_size
+            self.buckets = buckets
+            self.batch_size = batch_size
+
+            cell = single_cell = tf.nn.rnn_cell.GRUCell(size)
+            if num_layers > 1:
+                cell = tf.nn.rnn_cell.MultiRNNCell([single_cell] * num_layers)
+
+            # The seq2seq function: we use embedding for the input and attention.
+            def seq2seq_f(encoder_inputs, decoder_inputs, do_decode):
+                return tf.contrib.legacy_seq2seq.embedding_attention_seq2seq(
+                    encoder_inputs, decoder_inputs, cell,
+                    num_encoder_symbols=source_vocab_size,
+                    num_decoder_symbols=target_vocab_size,
+                    embedding_size=size,
+                    feed_previous=do_decode)
+
+            # Feeds for inputs.
+            self.encoder_inputs = []
+            self.decoder_inputs = []
+            self.target_weights = []
+            for i in range(buckets[-1][0]):	    # Last bucket is the biggest one.
+                self.encoder_inputs.append(tf.placeholder(tf.int32, shape=[None], name="encoder{0}".format(i)))
+            for i in range(buckets[-1][1] + 1):
+                self.decoder_inputs.append(tf.placeholder(tf.int32, shape=[None], name="decoder{0}".format(i)))
+                self.target_weights.append(tf.placeholder(tf.float32, shape=[None], name="weight{0}".format(i)))
+
+            # Our targets are decoder inputs shifted by one. OK
+            targets = [self.decoder_inputs[i + 1] for i in range(len(self.decoder_inputs) - 1)]
+            self.outputs, self.losses = tf.contrib.legacy_seq2seq.model_with_buckets(
+                self.encoder_inputs, self.decoder_inputs, targets,
+                self.target_weights, buckets,
+                lambda x, y: seq2seq_f(x, y, False))
+
+            # Gradients update operation for training the model.
+            params = tf.trainable_variables()
+            self.updates = []
+            for b in range(len(buckets)):
+                self.updates.append(tf.train.AdamOptimizer(learning_rate).minimize(self.losses[b]))
+
+            self.saver = tf.train.Saver(tf.global_variables())
+
+        def step(self, session, encoder_inputs, decoder_inputs, target_weights, test):
+            bucket_id = 0                   # todo: auto-select
+            encoder_size, decoder_size = self.buckets[bucket_id]
+
+            # Input feed: encoder inputs, decoder inputs, target_weights, as provided.
+            input_feed = {}
+            for l in range(encoder_size):
+                input_feed[self.encoder_inputs[l].name] = encoder_inputs[l]
+            for l in range(decoder_size):
+                input_feed[self.decoder_inputs[l].name] = decoder_inputs[l]
+                input_feed[self.target_weights[l].name] = target_weights[l]
+
+            # Since our targets are decoder inputs shifted by one, we need one more.
+            last_target = self.decoder_inputs[decoder_size].name
+            input_feed[last_target] = np.zeros([self.batch_size], dtype=np.int32)
+
+            # Output feed: depends on whether we do a backward step or not.
+            if not test:
+                output_feed = [self.updates[bucket_id], self.losses[bucket_id]]
+            else:
+                output_feed = [self.losses[bucket_id]]	    # Loss for this batch.
+                for l in range(decoder_size):	            # Output logits.
+                    output_feed.append(self.outputs[bucket_id][l])
+
+            outputs = session.run(output_feed, input_feed)
+            if not test:
+                return outputs[0], outputs[1]               # Gradient norm, loss
+            else:
+                return outputs[0], outputs[1:]              # loss, outputs.
+
+    def decode(_bytes):
+        return "".join(map(chr, _bytes)).replace('\x00', '').replace('\n', '')
+
+    def test():
+        perplexity, outputs = model.step(session, input_data, target_data, target_weights, test=True)
+        words = np.argmax(outputs, axis=2)  # shape (10, 10, 256)
+        word = decode(words[0])
+        print("step %d, perplexity %f, output: hello %s" % (step, perplexity, word))
+        if word == decode(secondary):
+            print(">>>>> success! hello " + word + "! <<<<<<<")
+            exit()
+
+    step = 0
+    test_step = 1
+    with tf.Session() as session:
+        model = BabySeq2Seq(vocab_size, target_vocab_size, buckets, size=10, num_layers=1, batch_size=batch_size)
+        session.run(tf.global_variables_initializer())
+        while True:
+            model.step(session, input_data, target_data, target_weights, test=False)    # no outputs in training
+            if step % test_step == 0:
+                test()
+            step = step + 1

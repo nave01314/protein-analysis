@@ -17,7 +17,7 @@ ss_letter_to_number = inv_map = {v: k for k, v in number_to_ss_letter.items()}
 
 
 def convert_FASTA(label, primary, secondary, v_label, v_primary, v_secondary, width, v_width):
-    filename = res.helper.make_relative_path('res', 'fasta.txt')
+    filename = res.helper.make_relative_path('res', 'test.txt')
     file = open(filename, 'r')
     sequences = []
     l_index = 0
@@ -74,7 +74,7 @@ def convert_primary_letter_to_number(letter: str):
 
 
 def convert_number_to_ss_letter(num: str):
-    return number_to_ss_letter[num]
+    return number_to_ss_letter[str(num)]
 
 
 def convert_ss_letter_to_number(letter: str):

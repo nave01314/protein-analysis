@@ -2,6 +2,7 @@
 
 import io_translator as translate
 
+
 def train(primary: list, secondary: list, v_primary: list, v_secondary: list, max_length: int):
     """Sequence-to-sequence model with an attention mechanism."""
     # see https://www.tensorflow.org/versions/r0.10/tutorials/seq2seq/index.html
@@ -106,6 +107,9 @@ def train(primary: list, secondary: list, v_primary: list, v_secondary: list, ma
             else:
                 return outputs[0], outputs[1:]              # loss, outputs.
 
+
+    def decode(bytes):
+        return "".join(map(chr, bytes)).replace('\x00', '').replace('\n', '')
 
 
     def test():
@@ -226,7 +230,6 @@ def model():
                 return outputs[0], outputs[1]# Gradient norm, loss
             else:
                 return outputs[0], outputs[1:]# loss, outputs.
-
 
     def decode(bytes):
         return "".join(map(chr, bytes)).replace('\x00', '').replace('\n', '')

@@ -9,10 +9,10 @@ import numpy
 letter_to_amino_map = {'A': 'Ala', 'B': 'Asx', 'C': 'Cys', 'D': 'Asp', 'E': 'Glu', 'F': 'Phe', 'G': 'Gly', 'H': 'His', 'I': 'Ile', 'K': 'Lys', 'L': 'Leu', 'M': 'Met', 'N': 'Asn', 'P': 'Pro', 'Q': 'Gln', 'R': 'Arg', 'S': 'Ser', 'T': 'Thr', 'U': 'Selenocysteine', 'V': 'Val', 'W': 'Trp', 'X': 'Any', 'Y': 'Tyr', 'Z': 'Glx'}
 letter_to_ss_map = {' ': 'Gap', 'H': 'Alpha helix', 'B': 'Beta bridge', 'E': 'Strand', 'G': 'Helix-3', 'I': 'Helix-5', 'T': 'Turn', 'S': 'Bend'}
 
-# Primary dictionary is just map(ord/chr,list)-65 to get 1-26
+# Primary dictionary is just map(ord/chr,list)-64 to get 1-26
 
 # Secondary dicts are below
-number_to_ss_letter = {'0': ' ', '1': 'H', '2': 'B', '3': 'E', '4': 'G', '5': 'I', '6': 'T', '7': 'S', '\x00': '', '\x01': ''}
+number_to_ss_letter = {'0': ' ', '1': 'H', '2': 'B', '3': 'E', '4': 'G', '5': 'I', '6': 'T', '7': 'S'}
 ss_letter_to_number = inv_map = {v: k for k, v in number_to_ss_letter.items()}
 
 
@@ -60,7 +60,7 @@ def prepare_primary_input(protein: str, pad_char: list, min_length: int):
 
 
 def decode_primary_input(protein: str, pad_char: list):
-    return ''.join(map(lambda x: chr(x+64), protein))
+    return ''.join(map(lambda x: chr(x+64).replace(chr(pad_char[0]+64), ' '), protein))
 
 
 def prepare_secondary_input(protein: str, pad_char: list, min_length: int):
@@ -68,7 +68,7 @@ def prepare_secondary_input(protein: str, pad_char: list, min_length: int):
 
 
 def decode_secondary_input(protein: str):
-    return [list(map(lambda x: number_to_ss_letter[chr(x)], protein))]
+    return ''.join(map(lambda x: number_to_ss_letter[str(x)], protein))
 
 
 def letter_to_amino(letter: str):

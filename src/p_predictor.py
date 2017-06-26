@@ -14,7 +14,7 @@ def train(primary: list, secondary: list, v_primary: list, v_secondary: list, ma
 
     true_max_length = max_length if max_length > 10 else 10
     vocab_size = 27                # We are lazy, so we avoid fancy mapping and just use one *class* per character/byte
-    target_vocab_size = 7
+    target_vocab_size = 8
     learning_rate = 0.1
     buckets = [(true_max_length, true_max_length)]
     pad = [0]                       # fill words shorter than 10 characters with 'padding' zeroes
@@ -109,11 +109,10 @@ def train(primary: list, secondary: list, v_primary: list, v_secondary: list, ma
         perplexity, outputs = model.step(session, input_data, target_data, target_weights, test=True)
         words = np.argmax(outputs, axis=2)  # shape (max, max, 256)
         source_word = translate.decode_primary_input(input_data[0], pad)
-        print(source_word)
         predicted_word = translate.decode_secondary_input(words[0])
         target_word = translate.decode_secondary_input(target_data[0])
         print('step %d, perplexity %f, output: Primary: [%s] Secondary: [%s] ' % (step, perplexity, source_word, predicted_word))
-        if word == target_word:
+        if predicted_word == target_word:
             print('>>>>> success! Primary: [%s] Secondary: [%s] <<<<<<<' % (source_word, predicted_word))
             exit()
 

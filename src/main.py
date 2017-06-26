@@ -18,7 +18,6 @@ res.helper.print('Beginning FASTA load from file...')
 max_length = io_translator.convert_FASTA(label, primary, secondary, v_label, v_primary, v_secondary, width, v_width)
 res.helper.print('FASTA data loaded %s training proteins and %s validation proteins successfully...' % (len(label),
                                                                                                         len(v_label)))
-
 res.helper.print('Beginning model training...')
 #predict.model()
 predict.train(primary, secondary, v_primary, v_secondary, max_length)

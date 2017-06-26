@@ -2,7 +2,6 @@
 
 import io_translator as translate
 
-
 def train(primary: list, secondary: list, v_primary: list, v_secondary: list, max_length: int):
     """Sequence-to-sequence model with an attention mechanism."""
     # see https://www.tensorflow.org/versions/r0.10/tutorials/seq2seq/index.html
@@ -104,7 +103,6 @@ def train(primary: list, secondary: list, v_primary: list, v_secondary: list, ma
             else:
                 return outputs[0], outputs[1:]              # loss, outputs.
 
-
     def test():
         perplexity, outputs = model.step(session, input_data, target_data, target_weights, test=True)
         words = np.argmax(outputs, axis=2)  # shape (max, max, 256)
@@ -142,8 +140,8 @@ def model():
     PAD = [0] # fill words shorter than 10 characters with 'padding' zeroes
     batch_size=10 # for parallel training (later)
 
-    input_data    = [map(ord, "hello") + PAD * 5] * batch_size
-    target_data   = [map(ord, "world") + PAD * 5] * batch_size
+    input_data    = [list(map(ord, "hello")) + PAD * 5] * batch_size
+    target_data   = [list(map(ord, "world")) + PAD * 5] * batch_size
     target_weights= [[1.0]*6 + [0.0]*4] *batch_size # mask padding. todo: redundant --
 
     # EOS='\n' # end of sequence symbol todo use how?
@@ -164,7 +162,7 @@ def model():
 
             # The seq2seq function: we use embedding for the input and attention.
             def seq2seq_f(encoder_inputs, decoder_inputs, do_decode):
-                return tf.nn.seq2seq.embedding_attention_seq2seq(
+                return tf.contrib.legacy_seq2seq.embedding_attention_seq2seq(
                     encoder_inputs, decoder_inputs, cell,
                     num_encoder_symbols=source_vocab_size,
                     num_decoder_symbols=target_vocab_size,
@@ -183,7 +181,7 @@ def model():
 
             # Our targets are decoder inputs shifted by one. OK
             targets = [self.decoder_inputs[i + 1] for i in range(len(self.decoder_inputs) - 1)]
-            self.outputs, self.losses = tf.nn.seq2seq.model_with_buckets(
+            self.outputs, self.losses = tf.contrib.legacy_seq2seq.model_with_buckets(
                 self.encoder_inputs, self.decoder_inputs, targets,
                 self.target_weights, buckets,
                 lambda x, y: seq2seq_f(x, y, False))
@@ -202,6 +200,7 @@ def model():
 
             # Input feed: encoder inputs, decoder inputs, target_weights, as provided.
             input_feed = {}
+            print(encoder_inputs)
             for l in range(encoder_size):
                 input_feed[self.encoder_inputs[l].name] = encoder_inputs[l]
             for l in range(decoder_size):

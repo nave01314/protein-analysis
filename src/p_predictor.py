@@ -13,21 +13,18 @@ def train(primary: list, secondary: list, v_primary: list, v_secondary: list, ma
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
     true_max_length = max_length if max_length > 10 else 10
-    vocab_size = 26                # We are lazy, so we avoid fancy mapping and just use one *class* per character/byte
+    vocab_size = 27                # We are lazy, so we avoid fancy mapping and just use one *class* per character/byte
     target_vocab_size = 7
     learning_rate = 0.1
-    # buckets = [(10, 10)]              # our input and response words can be up to 10 characters long
     buckets = [(true_max_length, true_max_length)]
-    PAD = [0]                       # fill words shorter than 10 characters with 'padding' zeroes
+    pad = [0]                       # fill words shorter than 10 characters with 'padding' zeroes
     batch_size = true_max_length                     # for parallel training (later)
 
-    #input_data = [list(map(ord, "hello")) + PAD * 5] * batch_size
     for protein in primary:
-        input_data = [list(map(translate.convert_primary_letter_to_number, protein)) + PAD * (10-len(protein))] * batch_size
-    #target_data = [list(map(ord, "world")) + PAD * 5] * batch_size
+        input_data = translate.prepare_primary_input(protein, pad, 10) * batch_size
     for protein in secondary:
-        target_data = ([list(map(translate.convert_ss_letter_to_number, protein)) + PAD * (10-len(protein))] * batch_size)
-    target_weights = [[1.0]*round(6/10*true_max_length) + [0.0]*round(4/10*true_max_length)] * batch_size # mask padding. todo: redundant --
+        target_data = translate.prepare_secondary_input(protein, pad, 10) * batch_size
+    target_weights = [[1.0]*6 + [0.0]*4] * batch_size           # mask padding. todo: redundant --
 
     # EOS='\n' # end of sequence symbol todo use how?
     # GO=1		 # start symbol 0x01 todo use how?
@@ -108,17 +105,16 @@ def train(primary: list, secondary: list, v_primary: list, v_secondary: list, ma
                 return outputs[0], outputs[1:]              # loss, outputs.
 
 
-    def decode(bytes):
-        return "".join(map(chr, bytes)).replace('\x00', '').replace('\n', '')
-
-
     def test():
         perplexity, outputs = model.step(session, input_data, target_data, target_weights, test=True)
         words = np.argmax(outputs, axis=2)  # shape (max, max, 256)
-        word = decode(words[0])
-        print('step %d, perplexity %f, output: Primary: [%s] Secondary: [%s] ' % (step, perplexity, primary[0], word))
-        if word == secondary[0]:
-            print('>>>>> success! Primary: [%s] Secondary: [%s] <<<<<<<' % (primary[0], word))
+        source_word = translate.decode_primary_input(input_data[0], pad)
+        print(source_word)
+        predicted_word = translate.decode_secondary_input(words[0])
+        target_word = translate.decode_secondary_input(target_data[0])
+        print('step %d, perplexity %f, output: Primary: [%s] Secondary: [%s] ' % (step, perplexity, source_word, predicted_word))
+        if word == target_word:
+            print('>>>>> success! Primary: [%s] Secondary: [%s] <<<<<<<' % (source_word, predicted_word))
             exit()
 
     step = 0

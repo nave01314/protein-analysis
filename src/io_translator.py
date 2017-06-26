@@ -12,7 +12,7 @@ letter_to_ss_map = {' ': 'Gap', 'H': 'Alpha helix', 'B': 'Beta bridge', 'E': 'St
 # Primary dictionary is just map(ord/chr,list)-65 to get 1-26
 
 # Secondary dicts are below
-number_to_ss_letter = {'0': ' ', '1': 'H', '2': 'B', '3': 'E', '4': 'G', '5': 'I', '6': 'T', '7': 'S'}
+number_to_ss_letter = {'0': ' ', '1': 'H', '2': 'B', '3': 'E', '4': 'G', '5': 'I', '6': 'T', '7': 'S', '\x00': '', '\x01': ''}
 ss_letter_to_number = inv_map = {v: k for k, v in number_to_ss_letter.items()}
 
 
@@ -51,6 +51,26 @@ def convert_FASTA(label, primary, secondary, v_label, v_primary, v_secondary, wi
     return max_length
 
 
+def decode(bytes):
+    return "".join(map(chr, bytes)).replace('\x00', '').replace('\n', '')
+
+
+def prepare_primary_input(protein: str, pad_char: list, min_length: int):
+    return [list(map(lambda x: ord(x)-64, protein)) + pad_char * (min_length-len(protein))]
+
+
+def decode_primary_input(protein: str, pad_char: list):
+    return ''.join(map(lambda x: chr(x+64), protein))
+
+
+def prepare_secondary_input(protein: str, pad_char: list, min_length: int):
+    return [list(map(lambda x: ss_letter_to_number[x], protein)) + pad_char * (min_length-len(protein))]
+
+
+def decode_secondary_input(protein: str):
+    return [list(map(lambda x: number_to_ss_letter[chr(x)], protein))]
+
+
 def letter_to_amino(letter: str):
     try:
         return letter_to_amino_map[letter]
@@ -58,24 +78,9 @@ def letter_to_amino(letter: str):
         print('KeyError: %s is not an acceptable primary key!' % letter)
 
 
-def letter_to_string(letter: str):
+def letter_to_ss_type(letter: str):
     try:
         return letter_to_ss_map[letter]
     except KeyError:
         print('KeyError: %s is not an acceptable secondary key!' % letter)
 
-
-def convert_number_to_primary_letter(num: int):
-    return chr(num+64)
-
-
-def convert_primary_letter_to_number(letter: str):
-    return ord(letter)-64
-
-
-def convert_number_to_ss_letter(num: str):
-    return number_to_ss_letter[str(num)]
-
-
-def convert_ss_letter_to_number(letter: str):
-    return ss_letter_to_number[letter]

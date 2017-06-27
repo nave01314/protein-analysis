@@ -2,6 +2,7 @@
 
 import io_translator as translate
 
+
 def train(primary: list, secondary: list, v_primary: list, v_secondary: list, max_length: int):
     """Sequence-to-sequence model with an attention mechanism."""
     # see https://www.tensorflow.org/versions/r0.10/tutorials/seq2seq/index.html
@@ -11,19 +12,20 @@ def train(primary: list, secondary: list, v_primary: list, v_secondary: list, ma
     import os
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
-    true_max_length = max_length if max_length > 10 else 10
-    vocab_size = 27                # We are lazy, so we avoid fancy mapping and just use one *class* per character/byte
-    target_vocab_size = 8
+    vocab_size = 27                # Each amino is a character A-Z with a padding character of ' '
+    target_vocab_size = 8          # Each SS type is a character (see map in io_translator)
     learning_rate = 0.1
-    buckets = [(true_max_length, true_max_length)]
-    pad = [0]                       # fill words shorter than 10 characters with 'padding' zeroes
-    batch_size = true_max_length                     # for parallel training (later)
+    buckets = [(10, 10)]           # Each word should be 10 characters or less
+    pad = [0]                      # Fill words shorter than a bucket size with padding zeroes
+    batch_size = 10                # for parallel training (later)
 
     for protein in primary:
-        input_data = translate.prepare_primary_input(protein, pad, 10) * batch_size
+        input_data = translate.prepare_primary_input(protein, pad, buckets[0][0]) * batch_size
+    target_weights = []
     for protein in secondary:
-        target_data = translate.prepare_secondary_input(protein, pad, 10) * batch_size
-    target_weights = [[1.0]*6 + [0.0]*4] * batch_size           # mask padding. todo: redundant --
+        target_data = translate.prepare_secondary_input(protein, pad, buckets[0][1]) * batch_size
+        target_weights.append([1.0] * (len(protein)+1) + [0.0] * (buckets[0][1]-len(protein)-1))
+    target_weights = target_weights * batch_size  # generate mask padding (redundant)
 
     # EOS='\n' # end of sequence symbol todo use how?
     # GO=1		 # start symbol 0x01 todo use how?
@@ -87,7 +89,7 @@ def train(primary: list, secondary: list, v_primary: list, v_secondary: list, ma
 
             # Since our targets are decoder inputs shifted by one, we need one more.
             last_target = self.decoder_inputs[decoder_size].name
-            input_feed[last_target] = np.zeros([self.batch_size], dtype=np.int32)
+            input_feed[last_target] = np.zeros([self.buckets[0][1]], dtype=np.int32)   # todo self.batch_size
 
             # Output feed: depends on whether we do a backward step or not.
             if not test:
@@ -138,7 +140,7 @@ def model():
     learning_rate=0.1
     buckets=[(10, 10)] # our input and response words can be up to 10 characters long
     PAD = [0] # fill words shorter than 10 characters with 'padding' zeroes
-    batch_size=10 # for parallel training (later)
+    batch_size=15 # for parallel training (later)
 
     input_data    = [list(map(ord, "hello")) + PAD * 5] * batch_size
     target_data   = [list(map(ord, "world")) + PAD * 5] * batch_size

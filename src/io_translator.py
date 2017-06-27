@@ -64,7 +64,7 @@ def decode_primary_input(protein: str, pad_char: list):
 
 
 def prepare_secondary_input(protein: str, pad_char: list, min_length: int):
-    return [list(map(lambda x: ss_letter_to_number[x], protein)) + pad_char * (min_length-len(protein))]
+    return [list(map(lambda x: int(ss_letter_to_number[x]), protein)) + pad_char * (min_length-len(protein))]
 
 
 def decode_secondary_input(protein: str):

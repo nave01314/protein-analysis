@@ -2,6 +2,7 @@
 
 import io_translator as translate
 
+
 def train(primary: list, secondary: list, v_primary: list, v_secondary: list, max_length: int):
     """Sequence-to-sequence model with an attention mechanism."""
     # see https://www.tensorflow.org/versions/r0.10/tutorials/seq2seq/index.html
@@ -11,19 +12,25 @@ def train(primary: list, secondary: list, v_primary: list, v_secondary: list, ma
     import os
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
-    true_max_length = max_length if max_length > 10 else 10
-    vocab_size = 27                # We are lazy, so we avoid fancy mapping and just use one *class* per character/byte
-    target_vocab_size = 8
-    learning_rate = 0.1
-    buckets = [(true_max_length, true_max_length)]
-    pad = [0]                       # fill words shorter than 10 characters with 'padding' zeroes
-    batch_size = true_max_length                     # for parallel training (later)
+    vocab_size = 27                # Each amino is a character A-Z with a padding character ' '
+    target_vocab_size = 8          # Each SS type is a character (see map in io_translator)
+    buckets = [(10, 10)]           # Inputs and output sequences must be less than 10, respectively
+    pad = [0]                      # Fill words shorter than a bucket size with padding
+    batch_size = 10                # for parallel training (later) I don't know how to change this
 
+    size = 12                      # Fed to model (determines complexity of NN)
+    num_layers = 1                 # Self-explanatory; how many "simple" cells are packaged together into the model
+    learning_rate = 0.1            # Self-explanatory; used in optimizer
+
+    input_data = []
     for protein in primary:
-        input_data = translate.prepare_primary_input(protein, pad, 10) * batch_size
+        input_data = translate.prepare_primary_input(protein, pad, buckets[0][0]) * batch_size
+    target_data = []
+    target_weights = []
     for protein in secondary:
-        target_data = translate.prepare_secondary_input(protein, pad, 10) * batch_size
-    target_weights = [[1.0]*6 + [0.0]*4] * batch_size           # mask padding. todo: redundant --
+        target_data = translate.prepare_secondary_input(protein, pad, buckets[0][1]) * batch_size
+        target_weights.append([1.0] * (len(protein)+1) + [0.0] * (buckets[0][1]-len(protein)-1))
+    target_weights *= batch_size
 
     # EOS='\n' # end of sequence symbol todo use how?
     # GO=1		 # start symbol 0x01 todo use how?
@@ -52,7 +59,7 @@ def train(primary: list, secondary: list, v_primary: list, v_secondary: list, ma
             self.encoder_inputs = []
             self.decoder_inputs = []
             self.target_weights = []
-            for i in range(buckets[-1][0]):	    # Last bucket is the biggest one.
+            for i in range(buckets[-1][0]):
                 self.encoder_inputs.append(tf.placeholder(tf.int32, shape=[None], name="encoder{0}".format(i)))
             for i in range(buckets[-1][1] + 1):
                 self.decoder_inputs.append(tf.placeholder(tf.int32, shape=[None], name="decoder{0}".format(i)))
@@ -104,12 +111,12 @@ def train(primary: list, secondary: list, v_primary: list, v_secondary: list, ma
                 return outputs[0], outputs[1:]              # loss, outputs.
 
     def test():
-        perplexity, outputs = model.step(session, input_data, target_data, target_weights, test=True)
+        perplexity, outputs = my_model.step(session, input_data, target_data, target_weights, test=True)
         words = np.argmax(outputs, axis=2)  # shape (max, max, 256)
         source_word = translate.decode_primary_input(input_data[0], pad)
         predicted_word = translate.decode_secondary_input(words[0])
         target_word = translate.decode_secondary_input(target_data[0])
-        print('step %d, perplexity %f, output: Primary: [%s] Secondary: [%s] ' % (step, perplexity, source_word, predicted_word))
+        print('step %d, perplexity %f, Primary: [%s] Secondary: [%s]' % (step, perplexity, source_word, predicted_word))
         if predicted_word == target_word:
             print('>>>>> success! Primary: [%s] Secondary: [%s] <<<<<<<' % (source_word, predicted_word))
             exit()
@@ -117,13 +124,15 @@ def train(primary: list, secondary: list, v_primary: list, v_secondary: list, ma
     step = 0
     test_step = 1
     with tf.Session() as session:
-        model = BabySeq2Seq(vocab_size, target_vocab_size, buckets, size=max_length, num_layers=1, batch_size=batch_size)
+        my_model = BabySeq2Seq(vocab_size, target_vocab_size, buckets,
+                               size=size, num_layers=num_layers, batch_size=batch_size)
         session.run(tf.global_variables_initializer())
         while True:
-            model.step(session, input_data, target_data, target_weights, test=False)    # no outputs in training
+            test()
+            my_model.step(session, input_data, target_data, target_weights, test=False)    # no outputs in training
+            step = step + 1
             if step % test_step == 0:
                 test()
-            step = step + 1
 
 
 def model():
@@ -200,7 +209,6 @@ def model():
 
             # Input feed: encoder inputs, decoder inputs, target_weights, as provided.
             input_feed = {}
-            print(encoder_inputs)
             for l in range(encoder_size):
                 input_feed[self.encoder_inputs[l].name] = encoder_inputs[l]
             for l in range(decoder_size):

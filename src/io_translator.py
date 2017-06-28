@@ -64,7 +64,7 @@ def decode_primary_input(protein: str, pad_char: list):
 
 
 def prepare_secondary_input(protein: str, pad_char: list, min_length: int):
-    return [list(map(lambda x: int(ss_letter_to_number[x]), protein)) + pad_char * (min_length-len(protein))]
+    return [[0] + list(map(lambda x: int(ss_letter_to_number[x]), protein)) + pad_char * (min_length-len(protein))]
 
 
 def decode_secondary_input(protein: str):
@@ -99,3 +99,4 @@ def from_batch(start, encoder_size, batch_size):
         batch_decoder.append([])
         for array in start:
             batch_decoder[batch_idx].append(array[batch_idx])
+    return batch_decoder

@@ -84,3 +84,18 @@ def letter_to_ss_type(letter: str):
     except KeyError:
         print('KeyError: %s is not an acceptable secondary key!' % letter)
 
+
+def to_batch(start, encoder_size, batch_size):
+    batch_encoder = []
+    for length_idx in range(encoder_size):
+        batch_encoder.append(
+            numpy.array([start[batch_idx][length_idx] for batch_idx in range(batch_size)], dtype=numpy.int32))
+    return batch_encoder
+
+
+def from_batch(start, encoder_size, batch_size):
+    batch_decoder = []
+    for batch_idx in range(batch_size):
+        batch_decoder.append([])
+        for array in start:
+            batch_decoder[batch_idx].append(array[batch_idx])

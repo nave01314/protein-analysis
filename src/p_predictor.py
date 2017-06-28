@@ -22,6 +22,7 @@ def train(primary: list, secondary: list, v_primary: list, v_secondary: list, ma
     num_layers = 1                 # Self-explanatory; how many "simple" cells are packaged together into the model
     learning_rate = 0.1            # Self-explanatory; used in optimizer
 
+    # Convert data to numbers
     input_data = []
     for protein in primary:
         input_data = translate.prepare_primary_input(protein, pad, buckets[0][0]) * batch_size
@@ -31,6 +32,11 @@ def train(primary: list, secondary: list, v_primary: list, v_secondary: list, ma
         target_data = translate.prepare_secondary_input(protein, pad, buckets[0][1]) * batch_size
         target_weights.append([1.0] * (len(protein)+1) + [0.0] * (buckets[0][1]-len(protein)-1))
     target_weights *= batch_size
+
+    # Move to batch-major formatting
+    input_data = translate.to_batch(input_data, buckets[0][0], batch_size)
+    target_data = translate.to_batch(target_data, buckets[0][1], batch_size)
+    target_weights = translate.to_batch(target_weights, buckets[0][1], batch_size)
 
     # EOS='\n' # end of sequence symbol todo use how?
     # GO=1		 # start symbol 0x01 todo use how?

@@ -36,18 +36,19 @@ def convert_FASTA(label, primary, secondary, v_label, v_primary, v_secondary, wi
             sequences[-1][l_index] = sequences[-1][l_index] + (line[:-1])
 
     for protein in sequences:
-        if len(label) < width:
-            label.append(protein[0][1:7])
-            primary.append(protein[1])
-            secondary.append(protein[3])
-            if len(protein[1]) > max_length:
-                max_length = len(protein[1])
-        elif len(v_label) < v_width:
-            v_label.append(protein[0][1:7])
-            v_primary.append(protein[1])
-            v_secondary.append(protein[3])
-            if len(protein[1]) > max_length:
-                max_length = len(protein[1])
+        if len(protein[1]) < 100:
+            if len(label) < width:
+                label.append(protein[0][1:7])
+                primary.append(protein[1])
+                secondary.append(protein[3])
+                if len(protein[1]) > max_length:
+                    max_length = len(protein[1])
+            elif len(v_label) < v_width:
+                v_label.append(protein[0][1:7])
+                v_primary.append(protein[1])
+                v_secondary.append(protein[3])
+                if len(protein[1]) > max_length:
+                    max_length = len(protein[1])
     return max_length
 
 
@@ -88,7 +89,7 @@ def letter_to_ss_type(letter: str):
 def make_batch(input_data, protein_len, batch_size):
     batch_encoder = []
     for length_idx in range(protein_len):
-        batch_encoder.append(np.array([input_data[batch_idx][length_idx] for batch_idx in range(batch_size)], dtype=np.int32))
+        batch_encoder.append(np.array([input_data[batchidx][length_idx] for batchidx in range(batch_size)]))
     return batch_encoder
 
 

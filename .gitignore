@@ -3,6 +3,6 @@ src/__pycache__/
 .idea/
 protein-analysis.iml
 res/fasta.txt
-res/fasta.txt
+src/temp.py
 res/test.txt
 src/temp.py

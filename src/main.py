@@ -12,8 +12,8 @@ v_label = []
 v_primary = []
 v_secondary = []
 
-width = 2
-v_width = 0
+width = 4
+v_width = 8
 
 res.helper.print('Beginning FASTA load from file...')
 max_length = io_translator.convert_FASTA(label, primary, secondary, v_label, v_primary, v_secondary, width, v_width)

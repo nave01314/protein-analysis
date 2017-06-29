@@ -3,6 +3,7 @@
 import io_translator
 import p_predictor as predict
 import res.helper
+import numpy
 
 label = []
 primary = []
@@ -11,15 +12,14 @@ v_label = []
 v_primary = []
 v_secondary = []
 
-width = 1
-v_width = 0
+width = 4
+v_width = 8
 
 res.helper.print('Beginning FASTA load from file...')
 max_length = io_translator.convert_FASTA(label, primary, secondary, v_label, v_primary, v_secondary, width, v_width)
 res.helper.print('FASTA data loaded %s training proteins and %s validation proteins successfully...' % (len(label),
                                                                                                         len(v_label)))
 res.helper.print('Beginning model training...')
-#predict.model()
 predict.train(primary, secondary, v_primary, v_secondary, max_length)
 #res.helper.print('Model training finished with an accuracy of %s...' % accuracy)
 

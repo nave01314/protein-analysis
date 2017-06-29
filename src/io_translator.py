@@ -3,7 +3,7 @@
 import sys
 import string
 import res.helper
-import numpy
+import numpy as np
 
 # One-way dictionaries
 letter_to_amino_map = {'A': 'Ala', 'B': 'Asx', 'C': 'Cys', 'D': 'Asp', 'E': 'Glu', 'F': 'Phe', 'G': 'Gly', 'H': 'His', 'I': 'Ile', 'K': 'Lys', 'L': 'Leu', 'M': 'Met', 'N': 'Asn', 'P': 'Pro', 'Q': 'Gln', 'R': 'Arg', 'S': 'Ser', 'T': 'Thr', 'U': 'Selenocysteine', 'V': 'Val', 'W': 'Trp', 'X': 'Any', 'Y': 'Tyr', 'Z': 'Glx'}
@@ -17,7 +17,7 @@ ss_letter_to_number = inv_map = {v: k for k, v in number_to_ss_letter.items()}
 
 
 def convert_FASTA(label, primary, secondary, v_label, v_primary, v_secondary, width, v_width):
-    filename = res.helper.make_relative_path('res', 'test.txt')
+    filename = res.helper.make_relative_path('res', 'fasta.txt')
     file = open(filename, 'r')
     sequences = []
     l_index = 0
@@ -56,7 +56,7 @@ def decode(bytes):
 
 
 def prepare_primary_input(protein: str, pad_char: list, min_length: int):
-    return [list(map(lambda x: ord(x)-64, protein)) + pad_char * (min_length-len(protein))]
+    return list(map(lambda x: ord(x)-64, protein)) + pad_char * (min_length-len(protein))
 
 
 def decode_primary_input(protein: str, pad_char: list):
@@ -64,7 +64,7 @@ def decode_primary_input(protein: str, pad_char: list):
 
 
 def prepare_secondary_input(protein: str, pad_char: list, min_length: int):
-    return [list(map(lambda x: int(ss_letter_to_number[x]), protein)) + pad_char * (min_length-len(protein))]
+    return [0] + list(map(lambda x: int(ss_letter_to_number[x]), protein)) + pad_char * (min_length-len(protein))
 
 
 def decode_secondary_input(protein: str):
@@ -84,3 +84,18 @@ def letter_to_ss_type(letter: str):
     except KeyError:
         print('KeyError: %s is not an acceptable secondary key!' % letter)
 
+
+def make_batch(input_data, protein_len, batch_size):
+    batch_encoder = []
+    for length_idx in range(protein_len):
+        batch_encoder.append(np.array([input_data[batch_idx][length_idx] for batch_idx in range(batch_size)], dtype=np.int32))
+    return batch_encoder
+
+
+def undo_batch(batched_data):
+    normal_data = []
+    for batch_idx in range(len(batched_data[0])):
+        normal_data.append([])
+        for array in batched_data:
+            normal_data[batch_idx].append(array[batch_idx])
+    return normal_data

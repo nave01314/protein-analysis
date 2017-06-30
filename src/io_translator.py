@@ -1,9 +1,9 @@
 # This file will load and convert input and output of the program
 
 import sys
-import string
 import res.helper
 import numpy as np
+import random
 
 # One-way dictionaries
 letter_to_amino_map = {'A': 'Ala', 'B': 'Asx', 'C': 'Cys', 'D': 'Asp', 'E': 'Glu', 'F': 'Phe', 'G': 'Gly', 'H': 'His', 'I': 'Ile', 'K': 'Lys', 'L': 'Leu', 'M': 'Met', 'N': 'Asn', 'P': 'Pro', 'Q': 'Gln', 'R': 'Arg', 'S': 'Ser', 'T': 'Thr', 'U': 'Selenocysteine', 'V': 'Val', 'W': 'Trp', 'X': 'Any', 'Y': 'Tyr', 'Z': 'Glx'}
@@ -21,7 +21,6 @@ def convert_FASTA(label, primary, secondary, v_label, v_primary, v_secondary, wi
     file = open(filename, 'r')
     sequences = []
     l_index = 0
-    max_length = 0
     for line in file:
         if line.find('sequence') is not -1:
             sequences.append([])
@@ -36,24 +35,29 @@ def convert_FASTA(label, primary, secondary, v_label, v_primary, v_secondary, wi
             sequences[-1][l_index] = sequences[-1][l_index] + (line[:-1])
 
     for protein in sequences:
-        if len(protein[1]) < 100:
-            if len(label) < width:
-                label.append(protein[0][1:7])
-                primary.append(protein[1])
-                secondary.append(protein[3])
-                if len(protein[1]) > max_length:
-                    max_length = len(protein[1])
-            elif len(v_label) < v_width:
-                v_label.append(protein[0][1:7])
-                v_primary.append(protein[1])
-                v_secondary.append(protein[3])
-                if len(protein[1]) > max_length:
-                    max_length = len(protein[1])
-    return max_length
+        if len(label) < width:
+            label.append(protein[0][1:7])
+            primary.append(protein[1])
+            secondary.append(protein[3])
+        elif len(v_label) < v_width:
+            v_label.append(protein[0][1:7])
+            v_primary.append(protein[1])
+            v_secondary.append(protein[3])
 
 
-def decode(bytes):
-    return "".join(map(chr, bytes)).replace('\x00', '').replace('\n', '')
+def choose_inputs(primary: list, secondary: list, batch_size: int):
+    p_inputs = []
+    s_inputs = []
+    max_length = 0
+    for i in range(batch_size):
+        index = random.randint(0, len(primary)-1)
+        while len(primary[index]) > 100:
+            index = random.randint(0, len(primary)-1)
+        p_inputs.append(primary[index])
+        s_inputs.append(secondary[index])
+        if len(primary[index]) > max_length:
+            max_length = len(primary[index])
+    return p_inputs, s_inputs, max_length
 
 
 def prepare_primary_input(protein: str, pad_char: list, min_length: int):
@@ -72,6 +76,25 @@ def decode_secondary_input(protein: str):
     return ''.join(map(lambda x: number_to_ss_letter[str(x)], protein))
 
 
+def make_batch(input_data: list, protein_len, batch_size):
+    batch_encoder = []
+    for length_idx in range(protein_len):
+        batch_encoder.append(np.array([input_data[batchidx][length_idx] for batchidx in range(batch_size)]))
+    return batch_encoder
+
+
+def undo_batch(batched_data: list):
+    normal_data = []
+    for batch_idx in range(len(batched_data[0])):
+        normal_data.append([])
+        for array in batched_data:
+            normal_data[batch_idx].append(array[batch_idx])
+    return normal_data
+
+
+
+
+
 def letter_to_amino(letter: str):
     try:
         return letter_to_amino_map[letter]
@@ -86,17 +109,4 @@ def letter_to_ss_type(letter: str):
         print('KeyError: %s is not an acceptable secondary key!' % letter)
 
 
-def make_batch(input_data, protein_len, batch_size):
-    batch_encoder = []
-    for length_idx in range(protein_len):
-        batch_encoder.append(np.array([input_data[batchidx][length_idx] for batchidx in range(batch_size)]))
-    return batch_encoder
 
-
-def undo_batch(batched_data):
-    normal_data = []
-    for batch_idx in range(len(batched_data[0])):
-        normal_data.append([])
-        for array in batched_data:
-            normal_data[batch_idx].append(array[batch_idx])
-    return normal_data

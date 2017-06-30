@@ -11,28 +11,15 @@ v_label = []
 v_primary = []
 v_secondary = []
 
-width = 8
-v_width = 8
+width = 300000
+v_width = 50000
 
 res.helper.print('Beginning FASTA load from file...')
-max_length = io_translator.convert_FASTA(label, primary, secondary, v_label, v_primary, v_secondary, width, v_width)
-print(max_length)
+io_translator.convert_FASTA(label, primary, secondary, v_label, v_primary, v_secondary, width, v_width)
 res.helper.print('FASTA data loaded %s training proteins and %s validation proteins successfully...' % (len(label),
                                                                                                         len(v_label)))
+
 res.helper.print('Beginning model training...')
-predict.train(primary, secondary, v_primary, v_secondary, max_length)
-#res.helper.print('Model training finished with an accuracy of %s...' % accuracy)
-
-# res.helper.print('Beginning model training...')
-# loss = predict.train(primary, secondary)
-# res.helper.print('Model training finished with a loss of %s...' % loss)
-#
-# res.helper.print('Beginning model validation...')
-# success = predict.assess_model(v_primary, v_secondary)
-# res.helper.print('Model validation finished with a success rate of %s...' % success)
-#
-# print('\nFinal Results: Model had a %s success rate in predicting secondary protein structure!' % (str(success)+'%'))
-
-
+predict.train(primary, secondary, v_primary, v_secondary)
 
 

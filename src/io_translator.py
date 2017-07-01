@@ -16,7 +16,7 @@ number_to_ss_letter = {'0': ' ', '1': 'H', '2': 'B', '3': 'E', '4': 'G', '5': 'I
 ss_letter_to_number = inv_map = {v: k for k, v in number_to_ss_letter.items()}
 
 
-def convert_FASTA(label, primary, secondary, v_label, v_primary, v_secondary, width, v_width):
+def convert_raw_FASTA(label, primary, secondary, v_label, v_primary, v_secondary, width, v_width):
     filename = res.helper.make_relative_path('res', 'fasta.txt')
     file = open(filename, 'r')
     sequences = []
@@ -45,19 +45,73 @@ def convert_FASTA(label, primary, secondary, v_label, v_primary, v_secondary, wi
             v_secondary.append(protein[3])
 
 
-def choose_inputs(primary: list, secondary: list, batch_size: int):
+def read_data_to_buckets(data_name: str, buckets: list):
+    filename = res.helper.make_relative_path('res', data_name)
+    file = open(filename, 'r')
+    sequences = []
+    l_index = 0
+    for line in file:
+        if line.find('sequence') is not -1:
+            sequences.append([])
+            sequences[-1].append(line[:-1])   # Get rid of line breaks
+            sequences[-1].append('')
+            l_index = 1
+        elif line.find('secstr') is not -1:
+            sequences[-1].append(line[:-1])
+            sequences[-1].append('')
+            l_index = 3
+        else:
+            sequences[-1][l_index] = sequences[-1][l_index] + (line[:-1])
+
+    labels = [[] for bucket in buckets]
+    data_set = [[] for bucket in buckets]
+    v_labels = [[] for bucket in buckets]
+    v_data_set = [[] for bucket in buckets]
+    count = 0
+    for protein in sequences:
+        if count < 300000:
+            for bucket_id in range(len(buckets)):
+                if len(protein[1]) < buckets[bucket_id][0]:
+                    labels[bucket_id].append(protein[0][1:7])
+                    data_set[bucket_id].append([protein[1], protein[3]])
+                    break
+        elif count < 350000:
+            for bucket_id in range(len(buckets)):
+                if len(protein[1]) < buckets[bucket_id][0]:
+                    v_labels[bucket_id].append(protein[0][1:7])
+                    v_data_set[bucket_id].append([protein[1], protein[3]])
+                    break
+        count += 1
+
+    return data_set, v_data_set, labels, v_labels
+
+
+def get_converted_batch(data_set: list, buckets: int, bucket_id: int, batch_size: int, pad: list):
     p_inputs = []
     s_inputs = []
-    max_length = 0
     for i in range(batch_size):
-        index = random.randint(0, len(primary)-1)
-        while len(primary[index]) > 100:
-            index = random.randint(0, len(primary)-1)
-        p_inputs.append(primary[index])
-        s_inputs.append(secondary[index])
-        if len(primary[index]) > max_length:
-            max_length = len(primary[index])
-    return p_inputs, s_inputs, max_length
+        source, target = random.choice(data_set[bucket_id])
+        p_inputs.append(source)
+        s_inputs.append(target)
+
+    # todo should likely have EOS \n and GO 1 symbols instead of 0
+    train_inputs = []
+    train_targets = []
+    for protein in p_inputs:
+        train_inputs.append(prepare_primary_input(protein, pad, buckets[0][bucket_id]))
+    for protein in s_inputs:
+        train_targets.append(prepare_secondary_input(protein, pad, buckets[0][1]))
+
+    batched_p_inputs = []
+    batched_s_inputs = []
+    batched_weights = []
+    for length_idx in range(buckets[bucket_id][0]):
+        batched_p_inputs.append([train_inputs[batch_idx][length_idx] for batch_idx in range(batch_size)])
+    for length_idx in range(buckets[bucket_id][1]):
+        batched_s_inputs.append([train_targets[batch_idx][length_idx] for batch_idx in range(batch_size)])
+        batched_weights.append([1.0] * batch_size)
+
+    return batched_p_inputs, batched_s_inputs, batched_weights
 
 
 def prepare_primary_input(protein: str, pad_char: list, min_length: int):

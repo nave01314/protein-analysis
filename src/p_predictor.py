@@ -1,55 +1,14 @@
-# This file is for all ML functions
-
+import os
 import numpy as np
 import tensorflow as tf
-import os
 
 import io_translator as tr
 import res.helper as helper
 
 
-def train(primary: list, secondary: list, v_primary: list, v_secondary: list):
-    """Sequence-to-sequence model with an attention mechanism."""
-    # see https://www.tensorflow.org/versions/r0.10/tutorials/seq2seq/index.html
-    # compare https://github.com/tflearn/tflearn/blob/master/examples/nlp/seq2seq_example.py
-
-    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
-
-    input_vocab_size = 27                # Each amino is a character A-Z with a padding character ' '
-    output_vocab_size = 8          # Each SS type is a character (see map in io_translator)
-    pad = [0]                      # Fill words shorter than a bucket size with padding
-    batch_size = 15                # Size of batch; for parallel training
-
-    cell_size = 12                      # Fed to model (determines complexity of NN)
-    model_layers = 1                 # Self-explanatory; how many "simple" cells are packaged together into the model
-    learning_rate = 0.5            # Self-explanatory; used in optimizer
-
-    primary, secondary, train_max_length = tr.choose_inputs(primary, secondary, batch_size)
-    v_primary, v_secondary, test_max_length = tr.choose_inputs(v_primary, v_secondary, batch_size)
-
-    max_length = max(test_max_length, train_max_length)
-
-    buckets = [(max_length, max_length)]           # Inputs and output sequences must be less than 10, respectively
-
-    # Convert data to numbers
-    train_inputs = []
-    train_targets = []
-    train_weights = []
-    for protein in primary:
-        train_inputs.append(tr.prepare_primary_input(protein, pad, buckets[0][0]))
-    for protein in secondary:
-        train_targets.append(tr.prepare_secondary_input(protein, pad, buckets[0][1]))
-        # train_weights.append([1.0] * (len(protein)+1) + [0.0] * (buckets[0][1]-len(protein)-1))
-        train_weights.append([1.0] * buckets[0][1])
-
-    batched_train_inputs = tr.make_batch(train_inputs, buckets[0][0], batch_size)
-    batched_train_targets = tr.make_batch(train_targets, buckets[0][1], batch_size)
-    batched_train_weights = tr.make_batch(train_weights, buckets[0][1], batch_size)
-
-    # todo should likely have EOS \n and GO 1 symbols instead of 0
-
+def make_model(input_vocab_size, output_vocab_size, buckets, cell_size, model_layers, batch_size, learning_rate):
     class MySeq2Seq(object):
-        def __init__(self, source_vocab_size, target_vocab_size, buckets, size, num_layers, batch_size):
+        def __init__(self, source_vocab_size, target_vocab_size, buckets, size, num_layers, batch_size, learning_rate):
             self.source_vocab_size = source_vocab_size
             self.target_vocab_size = target_vocab_size
             self.buckets = buckets
@@ -123,29 +82,25 @@ def train(primary: list, secondary: list, v_primary: list, v_secondary: list):
                 return outputs[0], outputs[1]               # Gradient norm, loss
             else:
                 return outputs[0], outputs[1:]              # loss, outputs.
+    # return MySeq2Seq(input_vocab_size, output_vocab_size, buckets,
+    #                  size=cell_size, num_layers=model_layers, batch_size=batch_size)
+    return MySeq2Seq(input_vocab_size, output_vocab_size, buckets=buckets,
+                     size=cell_size, num_layers=model_layers, batch_size=batch_size, learning_rate=learning_rate)
+
+
+def train(my_model, data_set, v_data_set, buckets, bucket_id, batch_size, pad):
 
     def test():
-        test_inputs = []
-        test_targets = []
-        test_weights = []
-        for protein in v_primary:
-            test_inputs.append(tr.prepare_primary_input(protein, pad, buckets[0][0]))
-        for protein in v_secondary:
-            test_targets.append(tr.prepare_secondary_input(protein, pad, buckets[0][1]))
-            test_weights.append([1.0] * buckets[0][1])
-
-        batched_test_inputs = tr.make_batch(test_inputs, buckets[0][0], batch_size)
-        batched_test_targets = tr.make_batch(test_targets, buckets[0][1], batch_size)
-        batched_test_weights = tr.make_batch(test_weights, buckets[0][1], batch_size)
-
-        perplexity, outputs = my_model.step(session, batched_test_inputs, batched_test_targets, batched_test_weights, test=True)
+        perplexity, outputs = my_model.step(session, batched_v_primary, batched_v_secondary, batched_v_weights, test=True)
+        normalized_sources = tr.undo_batch(batched_v_primary)
         words = tr.undo_batch(np.argmax(outputs, axis=2))  # shape (max, max, 256)
+        normalized_targets = tr.undo_batch(batched_v_secondary)
 
         correctness = 0
-        for i in range(len(test_inputs)):
-            source_word = tr.decode_primary_input(test_inputs[i], pad)
+        for i in range(len(normalized_sources)):
+            source_word = tr.decode_primary_input(normalized_sources[i], pad)
             predicted_word = tr.decode_secondary_input(words[i])
-            target_word = tr.decode_secondary_input(test_targets[i])[1:]
+            target_word = tr.decode_secondary_input(normalized_targets[i])[1:]
 
             accuracy = helper.assess_accuracy(predicted_word, target_word)
             correctness += accuracy
@@ -155,20 +110,19 @@ def train(primary: list, secondary: list, v_primary: list, v_secondary: list):
             else:
                 print('Acc %f Step %d Perplexity %f Primary [%s] Predicted [%s] Target [%s]' % (accuracy, step, perplexity, source_word, predicted_word, target_word))
 
-        print('Model is %s%% effective' % str(round(correctness/len(test_inputs)*100)))
+        print('Model is %s%% effective' % str(round(correctness/len(normalized_sources)*100)))
 
-        if correctness == len(test_inputs):
+        if correctness == len(normalized_sources):
             exit()
 
     step = 0
     test_step = 5
     with tf.Session() as session:
-        my_model = MySeq2Seq(input_vocab_size, output_vocab_size, buckets,
-                               size=cell_size, num_layers=model_layers, batch_size=batch_size)
         session.run(tf.global_variables_initializer())
-        test()
         while True:
-            my_model.step(session, batched_train_inputs, batched_train_targets, batched_train_weights, test=False)    # no outputs in training
+            batched_primary, batched_secondary, batched_weights = tr.get_converted_batch(data_set, buckets, bucket_id, batch_size, pad)
+            my_model.step(session, batched_primary, batched_secondary, batched_weights, test=False)    # no outputs in training
             step = step + 1
             if step % test_step == 0:
+                batched_v_primary, batched_v_secondary, batched_v_weights = tr.get_converted_batch(v_data_set, buckets, 0, batch_size, pad)
                 test()
